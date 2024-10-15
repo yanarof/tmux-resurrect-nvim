@@ -363,33 +363,95 @@ cleanup_restored_pane_contents() {
 	fi
 }
 
-main() {
-    #Allows to load the resurrect when it's being synced between different computers
-	last_resurrect_found=$(ls -lArth "${HOME}/.tmux/resurrect/last" | grep tmux_resurrect_.*txt | grep -iv "last -" | tail  -n 1 | xargs | cut -d " " -f 9)
-	last_file_target=$(readlink -f "${HOME}/.tmux/resurrect/last")
-	#TODO: maybe instead of systematically restore the last file, first prompt to the user which file to load ?
-	if [[ $last_resurrect_found == *".txt" ]]; then
-		ln -sf $last_resurrect_found "${HOME}/.tmux/resurrect/last"
-	fi
 
-	if supported_tmux_version_ok && check_saved_session_exists; then
-		start_spinner "Restoring..." "Tmux restore complete!"
-		execute_hook "pre-restore-all"
-		restore_all_panes
-		handle_session_0
-		restore_window_properties >/dev/null 2>&1
-		execute_hook "pre-restore-pane-processes"
-		restore_all_pane_processes
-		# below functions restore exact cursor positions
-		restore_active_pane_for_each_window
-		restore_zoomed_windows
-		restore_grouped_sessions  # also restores active and alt windows for grouped sessions
-		restore_active_and_alternate_windows
-		restore_active_and_alternate_sessions
-		cleanup_restored_pane_contents
-		execute_hook "post-restore-all"
-		stop_spinner
-		display_message "Tmux restore complete!"
-	fi
+wait_for_file_content(){
+    #wait for file to exist and not empty
+    filetowait=$1
+    timeout_sec=10
+    elapsed_time=0
+    selected_file=""
+    file_content=""
+    # loop while not timeout
+    while [[ $elapsed_time -lt $timeout_sec ]]; do
+        elapsed_time=$((elapsed_time + 1))
+        #break if content of file is not empty
+        if [[ -e "$filetowait" ]]; then
+            file_content=$(cat "$filetowait")
+            if [[ ! -z $file_content ]]; then
+                echo "$file_content"
+                return
+            fi
+        fi
+        sleep 1
+    done
+    echo ""
+    return
+}
+
+
+main() {
+    # Available files
+    files=$(ls -lt ~/.tmux/resurrect/ | grep tmux_resurrect.*txt | grep -iv last | head -n 8 | awk '{print $9}')
+    temp_file="${HOME}/.tmux/resurrect/temp_selectedfile"
+    if [[ -e $temp_file ]]; then
+        rm "$temp_file"
+    fi
+    # Build the display-menu command dynamically 
+    #   we have to write to a file and then read from the file
+    menu_cmd="tmux display-menu -T \"Select a file to restore\" "
+    index=1
+    for file in $files; do
+        menu_cmd="$menu_cmd \"$file\" $index \"run-shell 'echo $file > $temp_file'\""
+        index=$((index + 1))
+    done
+    tmux run-shell "$menu_cmd"
+    selected_file=$(wait_for_file_content $temp_file)
+
+    # Read the selected file from the temp file
+    if [[ ! -z $selected_file ]]; then
+        display_message "You selected: $selected_file"
+
+        # Create a symlink to the selected file
+        if [[ -e "${HOME}/.tmux/resurrect/last" ]]; then
+            rm "${HOME}/.tmux/resurrect/last"
+        fi
+        ln -sf "$selected_file" "${HOME}/.tmux/resurrect/last"
+        sleep 1
+
+        if supported_tmux_version_ok && check_saved_session_exists; then
+            start_spinner "Restoring..." "Tmux restore complete!"
+            execute_hook "pre-restore-all"
+            restore_all_panes
+            handle_session_0
+            restore_window_properties >/dev/null 2>&1
+            execute_hook "pre-restore-pane-processes"
+            restore_all_pane_processes
+            # below functions restore exact cursor positions
+            restore_active_pane_for_each_window
+            restore_zoomed_windows
+            restore_grouped_sessions  # also restores active and alt windows for grouped sessions
+            restore_active_and_alternate_windows
+            restore_active_and_alternate_sessions
+            cleanup_restored_pane_contents
+            execute_hook "post-restore-all"
+            stop_spinner
+            display_message "Tmux restore complete of $selected_file !"
+        else
+            msg1=$(supported_tmux_version_ok)
+            msg2=$(check_saved_session_exists)
+            if ! supported_tmux_version_ok ; then
+                display_message "Tmux restore aborted, unsupported version $msg1 !"
+            else
+                display_message "Tmux restore aborted, no saved session exists $msg2 !"
+            fi
+        fi
+
+    else
+        display_message "No restore file found $temp_file"
+    fi
+
+    if [[ -e $temp_file ]]; then
+        rm $temp_file
+    fi
 }
 main

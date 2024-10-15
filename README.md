@@ -1,3 +1,20 @@
+# Modifications notes:
+
+This fork allows to:
+
+- restore the nvim (replaces `/tmp/.mount_nvimcO3lXk/usr/bin/nvim` by `nvim`)
+- when restoring, a popup menu asks which resurrect file to use
+
+With the following settings:
+
+```tmux.conf
+resurrect_dir="$HOME/.tmux/resurrect"
+set -g @resurrect-dir $resurrect_dir
+set -g @resurrect-capture-pane-contents 'on'
+set -g @resurrect-hook-post-save-all 'sed -i -E "s|(pane.nvim\s:)[^;]+;.*\s([^ ]+)$|\1nvim \2|" ${resurrect_dir}/last'
+set -g @resurrect-processes "'~nvim'"
+```
+
 # Tmux Resurrect
 
 [![Build Status](https://travis-ci.org/tmux-plugins/tmux-resurrect.svg?branch=master)](https://travis-ci.org/tmux-plugins/tmux-resurrect)
