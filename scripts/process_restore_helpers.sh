@@ -9,6 +9,8 @@ restore_pane_processes_enabled() {
 
 restore_pane_process() {
 	local pane_full_command="$1"
+	pane_full_command=$(echo $pane_full_command | sed "s/\/tmp\/.mount.*bin\/nvim /nvim /g") #this will replace the "/tmp/.mount_nvimXfWl7e" to "nvim"
+
 	local session_name="$2"
 	local window_number="$3"
 	local pane_index="$4"

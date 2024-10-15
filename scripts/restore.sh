@@ -30,7 +30,7 @@ is_line_type() {
 check_saved_session_exists() {
 	local resurrect_file="$(last_resurrect_file)"
 	if [ ! -f $resurrect_file ]; then
-		display_message "Tmux resurrect file not found!"
+		display_message "Tmux resurrect file not found! $resurrect_file" 
 		return 1
 	fi
 }
@@ -364,6 +364,14 @@ cleanup_restored_pane_contents() {
 }
 
 main() {
+    #Allows to load the resurrect when it's being synced between different computers
+	last_resurrect_found=$(ls -lArth "${HOME}/.tmux/resurrect/last" | grep tmux_resurrect_.*txt | grep -iv "last -" | tail  -n 1 | xargs | cut -d " " -f 9)
+	last_file_target=$(readlink -f "${HOME}/.tmux/resurrect/last")
+	#TODO: maybe instead of systematically restore the last file, first prompt to the user which file to load ?
+	if [[ $last_resurrect_found == *".txt" ]]; then
+		ln -sf $last_resurrect_found "${HOME}/.tmux/resurrect/last"
+	fi
+
 	if supported_tmux_version_ok && check_saved_session_exists; then
 		start_spinner "Restoring..." "Tmux restore complete!"
 		execute_hook "pre-restore-all"
